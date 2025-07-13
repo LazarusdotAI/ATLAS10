@@ -77,7 +77,7 @@ class LeeMethodScanner:
     
     def __init__(self, fmp_api_key: str = None):
         self.logger = logger
-        self.fmp_api_key = fmp_api_key or "demo"
+        self.fmp_api_key = fmp_api_key or "K63wnAbUDHNPICjzeq3JcEG1vi8Q2oz7"
         self.base_url = "https://financialmodelingprep.com/api/v3"
         
         # Lee Method parameters

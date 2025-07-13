@@ -181,7 +181,8 @@ def update_progress_callback(component: str, progress: float, status: EngineStat
 async def root():
     """Root endpoint - serve the main interface"""
     try:
-        return FileResponse("atlas_interface.html")
+        interface_path = os.path.join(os.path.dirname(__file__), "atlas_interface.html")
+        return FileResponse(interface_path)
     except FileNotFoundError:
         return HTMLResponse("""
         <html>
@@ -210,7 +211,8 @@ async def root():
 async def interface():
     """Serve the main interface file"""
     try:
-        return FileResponse("atlas_interface.html")
+        interface_path = os.path.join(os.path.dirname(__file__), "atlas_interface.html")
+        return FileResponse(interface_path)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Interface file not found")
 
