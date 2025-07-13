@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A.T.L.A.S. - Advanced Trading & Learning Analysis System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(0, 0, 0, 0.2);
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            padding: 1rem;
+            gap: 1rem;
+            overflow: hidden;
+        }
+
+        .chat-panel {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .message.user {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .message.assistant {
+            background: white;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .input-container {
+            padding: 1rem;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .message-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-button {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 0.75rem 1rem;
+            background: #f0f0f0;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            max-width: 80%;
+        }
+
+        .typing-dots {
+            display: inline-block;
+        }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #999;
+            margin: 0 2px;
+            animation: typing 1.4s infinite ease-in-out;
+        }
+
+        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
+        }
+
+        .status-connected {
+            background: #28a745;
+        }
+
+        .status-disconnected {
+            background: #dc3545;
+        }
+
+        .confidence-indicator {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+
+        .message-metadata {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 0.5rem;
+            border-top: 1px solid #eee;
+            padding-top: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .message {
+                max-width: 95%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 A.T.L.A.S.</h1>
+        <p>Advanced Trading & Learning Analysis System powered by Predicto</p>
+    </div>
+
+    <div class="status-indicator status-disconnected" id="statusIndicator">
+        Connecting...
+    </div>
+
+    <div class="main-container">
+        <div class="chat-panel">
+            <div class="panel-header">
+                💬 General Trading Assistant
+            </div>
+            <div class="chat-messages" id="leftChatMessages">
+                <div class="message assistant">
+                    <strong>A.T.L.A.S. powered by Predicto</strong><br>
+                    Welcome! I'm your advanced trading assistant. I can help you with stock analysis, market insights, trading strategies, and educational content. What would you like to explore today?
+                </div>
+            </div>
+            <div class="typing-indicator" id="leftTypingIndicator">
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                A.T.L.A.S. is thinking...
+            </div>
+            <div class="input-container">
+                <input type="text" class="message-input" id="leftMessageInput" 
+                       placeholder="Ask me about stocks, trading strategies, or market analysis..." 
+                       maxlength="500">
+                <button class="send-button" id="leftSendButton">Send</button>
+            </div>
+        </div>
+
+        <div class="chat-panel">
+            <div class="panel-header">
+                🎯 Pattern Scanner & Execution
+            </div>
+            <div class="chat-messages" id="rightChatMessages">
+                <div class="message assistant">
+                    <strong>A.T.L.A.S. Trading Engine</strong><br>
+                    Ready for pattern detection and trade execution. Try commands like "scan for TTM squeeze" or "analyze AAPL for trading opportunities".
+                </div>
+            </div>
+            <div class="typing-indicator" id="rightTypingIndicator">
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                Scanning markets...
+            </div>
+            <div class="input-container">
+                <input type="text" class="message-input" id="rightMessageInput" 
+                       placeholder="Enter trading commands or pattern scan requests..." 
+                       maxlength="500">
+                <button class="send-button" id="rightSendButton">Execute</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ATLASInterface {
+            constructor() {
+                this.apiUrl = 'http://localhost:8080/api/v1/chat';
+                this.sessionId = this.generateSessionId();
+                this.isConnected = false;
+                this.conversationHistory = {
+                    left: [],
+                    right: []
+                };
+                
+                this.initializeEventListeners();
+                this.checkConnection();
+            }
+
+            generateSessionId() {
+                return 'atlas-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            }
+
+            initializeEventListeners() {
+                // Left panel (General Trading)
+                const leftInput = document.getElementById('leftMessageInput');
+                const leftButton = document.getElementById('leftSendButton');
+                
+                leftInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage('left');
+                    }
+                });
+                
+                leftButton.addEventListener('click', () => this.sendMessage('left'));
+
+                // Right panel (Pattern Scanner)
+                const rightInput = document.getElementById('rightMessageInput');
+                const rightButton = document.getElementById('rightSendButton');
+                
+                rightInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage('right');
+                    }
+                });
+                
+                rightButton.addEventListener('click', () => this.sendMessage('right'));
+            }
+
+            async checkConnection() {
+                try {
+                    const response = await fetch('http://localhost:8080/api/v1/health');
+                    if (response.ok) {
+                        this.updateConnectionStatus(true);
+                    } else {
+                        this.updateConnectionStatus(false);
+                    }
+                } catch (error) {
+                    this.updateConnectionStatus(false);
+                }
+            }
+
+            updateConnectionStatus(connected) {
+                this.isConnected = connected;
+                const indicator = document.getElementById('statusIndicator');
+                
+                if (connected) {
+                    indicator.textContent = 'Connected';
+                    indicator.className = 'status-indicator status-connected';
+                } else {
+                    indicator.textContent = 'Disconnected';
+                    indicator.className = 'status-indicator status-disconnected';
+                }
+            }
+
+            async sendMessage(panel) {
+                const inputId = panel + 'MessageInput';
+                const input = document.getElementById(inputId);
+                const message = input.value.trim();
+                
+                if (!message) return;
+                
+                // Clear input and disable button
+                input.value = '';
+                this.setButtonState(panel, false);
+                
+                // Add user message to chat
+                this.addMessage(message, 'user', panel);
+                
+                // Show typing indicator
+                this.showTypingIndicator(panel, true);
+                
+                try {
+                    // Send to backend - NO FALLBACKS, let backend handle everything
+                    console.log(`🚀 Sending message to A.T.L.A.S.: "${message}"`);
+                    const response = await this.callAPI(message, panel);
+                    console.log('✅ A.T.L.A.S. response received:', response);
+                    
+                    // Hide typing indicator
+                    this.showTypingIndicator(panel, false);
+                    
+                    // Add assistant response
+                    this.addMessage(response.response, 'assistant', panel, {
+                        type: response.type,
+                        confidence: response.confidence,
+                        analysis: response.analysis,
+                        recommendations: response.recommendations
+                    });
+                    
+                } catch (error) {
+                    console.error('❌ API call failed:', error);
+                    this.showTypingIndicator(panel, false);
+                    
+                    // Only show connection error, no content fallbacks
+                    this.addMessage(
+                        "⚠️ I'm having trouble connecting to the A.T.L.A.S. system right now. Please check that the server is running and try again.",
+                        'assistant',
+                        panel,
+                        { type: 'connection_error', confidence: 0.0 }
+                    );
+                } finally {
+                    this.setButtonState(panel, true);
+                }
+            }
+
+            async callAPI(message, panel) {
+                const requestData = {
+                    message: message,
+                    session_id: this.sessionId,
+                    context: {
+                        panel_type: panel,
+                        interface_type: panel === 'right' ? 'pattern_scanner' : 'general_trading',
+                        conversation_history: this.conversationHistory[panel] || [],
+                        interface: 'web',
+                        timestamp: new Date().toISOString(),
+                        user_id: 'web_user'
+                    }
+                };
+
+                console.log('📤 Sending request to A.T.L.A.S.:', requestData);
+
+                const response = await fetch(this.apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData),
+                    timeout: 30000
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                console.log('📥 Raw A.T.L.A.S. response:', data);
+
+                // Store conversation history for context
+                this.conversationHistory[panel].push({
+                    user: message,
+                    assistant: data.response,
+                    timestamp: new Date().toISOString()
+                });
+                
+                // Keep only last 10 exchanges for context
+                if (this.conversationHistory[panel].length > 10) {
+                    this.conversationHistory[panel] = this.conversationHistory[panel].slice(-10);
+                }
+
+                return {
+                    response: data.response || data.message || 'I received your message but had trouble processing it.',
+                    type: data.type || 'general',
+                    confidence: data.confidence || 0.8,
+                    analysis: data.analysis,
+                    recommendations: data.recommendations
+                };
+            }
+
+            addMessage(content, sender, panel, metadata = {}) {
+                const messagesContainer = document.getElementById(panel + 'ChatMessages');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}`;
+                
+                let messageContent = content;
+                
+                // Add confidence indicator for assistant messages
+                if (sender === 'assistant' && metadata.confidence !== undefined) {
+                    const confidencePercent = Math.round(metadata.confidence * 100);
+                    messageContent += `<div class="confidence-indicator">Confidence: ${confidencePercent}%</div>`;
+                }
+                
+                // Add metadata if available
+                if (metadata.type && metadata.type !== 'general') {
+                    messageContent += `<div class="message-metadata">Type: ${metadata.type}</div>`;
+                }
+                
+                messageDiv.innerHTML = messageContent;
+                messagesContainer.appendChild(messageDiv);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+
+            showTypingIndicator(panel, show) {
+                const indicator = document.getElementById(panel + 'TypingIndicator');
+                indicator.style.display = show ? 'block' : 'none';
+                
+                if (show) {
+                    const messagesContainer = document.getElementById(panel + 'ChatMessages');
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }
+            }
+
+            setButtonState(panel, enabled) {
+                const button = document.getElementById(panel + 'SendButton');
+                const input = document.getElementById(panel + 'MessageInput');
+                
+                button.disabled = !enabled;
+                input.disabled = !enabled;
+                
+                if (enabled) {
+                    input.focus();
+                }
+            }
+        }
+
+        // Initialize the interface when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.atlasInterface = new ATLASInterface();
+            
+            // Check connection every 30 seconds
+            setInterval(() => {
+                window.atlasInterface.checkConnection();
+            }, 30000);
+        });
+    </script>
+</body>
+</html>

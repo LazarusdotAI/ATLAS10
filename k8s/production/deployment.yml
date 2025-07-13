@@ -1,0 +1,337 @@
+# 🏛️ A.T.L.A.S. Kubernetes Production Deployment
+# Institutional-grade high availability configuration
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: atlas-production
+  labels:
+    name: atlas-production
+    environment: production
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atlas-config
+  namespace: atlas-production
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  REDIS_URL: "redis://redis-service:6379"
+  DATABASE_URL: "postgresql://atlas:${DB_PASSWORD}@postgres-service:5432/atlas_prod"
+  PROMETHEUS_PORT: "8001"
+  HEALTH_CHECK_INTERVAL: "30"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: atlas-secrets
+  namespace: atlas-production
+type: Opaque
+data:
+  # Base64 encoded secrets (replace with actual values)
+  DB_PASSWORD: cGFzc3dvcmQxMjM=  # password123
+  OPENAI_API_KEY: c2stZXhhbXBsZWtleQ==  # sk-examplekey
+  ALPACA_API_KEY: QUtleWV4YW1wbGU=  # AKeyexample
+  ALPACA_SECRET_KEY: c2VjcmV0ZXhhbXBsZQ==  # secretexample
+  JWT_SECRET: and0c2VjcmV0a2V5MTIz  # jwtsecretkey123
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atlas-trading-system
+  namespace: atlas-production
+  labels:
+    app: atlas
+    version: blue
+    tier: application
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: atlas
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: atlas
+        version: blue
+        tier: application
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: atlas-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: atlas-app
+        image: ghcr.io/your-org/atlas-rebuilt/atlas-trading-system:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        - containerPort: 8001
+          name: metrics
+          protocol: TCP
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: atlas-secrets
+              key: DB_PASSWORD
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: atlas-secrets
+              key: OPENAI_API_KEY
+        - name: ALPACA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: atlas-secrets
+              key: ALPACA_API_KEY
+        - name: ALPACA_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: atlas-secrets
+              key: ALPACA_SECRET_KEY
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: atlas-secrets
+              key: JWT_SECRET
+        envFrom:
+        - configMapRef:
+            name: atlas-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: cache
+          mountPath: /app/cache
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      - name: config
+        configMap:
+          name: atlas-config
+      nodeSelector:
+        node-type: application
+      tolerations:
+      - key: "application"
+        operator: "Equal"
+        value: "atlas"
+        effect: "NoSchedule"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - atlas
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atlas-service
+  namespace: atlas-production
+  labels:
+    app: atlas
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP
+    name: metrics
+  selector:
+    app: atlas
+    version: blue
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: atlas-service-account
+  namespace: atlas-production
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/atlas-service-role
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: atlas-ingress
+  namespace: atlas-production
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+  - hosts:
+    - api.atlas-trading.com
+    secretName: atlas-tls-secret
+  rules:
+  - host: api.atlas-trading.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: atlas-service
+            port:
+              number: 80
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: atlas-hpa
+  namespace: atlas-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: atlas-trading-system
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: atlas-pdb
+  namespace: atlas-production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: atlas
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: atlas-network-policy
+  namespace: atlas-production
+spec:
+  podSelector:
+    matchLabels:
+      app: atlas
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8001
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: atlas-production
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 6379  # Redis
+  - to: []  # Allow external API calls
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
