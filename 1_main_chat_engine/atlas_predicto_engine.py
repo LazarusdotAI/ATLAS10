@@ -1408,7 +1408,7 @@ Use this data to generate a dynamic, engaging 6-point response that follows the 
                 # Scan for TTM Squeeze signals
                 if symbols:
                     # Analyze specific symbols
-                    response_text = f"[TARGET] **A.T.L.A.S. TTM Squeeze Analysis for {', '.join(symbols)}:**\n\n"
+                    response_text = f"[TARGET] **A.T.L.A.S. Lee Method Analysis for {', '.join(symbols)}:**\n\n"
 
                     for symbol in symbols:
                         try:
